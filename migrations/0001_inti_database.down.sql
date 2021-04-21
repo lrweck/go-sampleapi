@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS Transactions;
+DROP TABLE IF EXISTS OperationTypes;
+DROP TABLE IF EXISTS Accounts;
