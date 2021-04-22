@@ -50,36 +50,40 @@ func setupDBConn() (*pgx.ConnPool, error) {
 	return pool, nil
 }
 
-func DBCreateAccount(p PostAccount) error {
+func DBCreateAccount(p PostAccount) (uuid.UUID, error) {
 	pool, _ := GetConn()
 
 	conn, err := pool.Acquire()
 
 	if err != nil {
-		return err
+		return uuid.Nil, err
 	}
-
 	defer pool.Release(conn)
 
-	if err != nil {
-		return err
-	}
-
 	sql := `INSERT INTO ACCOUNTS (AccountID,DocNumber) VALUES ($1::uuid, $2::text);`
-	if _, err := conn.Exec(sql, uuid.New(), p.DocNumber); err != nil {
-		return err
+
+	id := uuid.New()
+	if _, err := conn.Exec(sql, id, p.DocNumber); err != nil {
+		return uuid.Nil, err
 	}
 
-	return nil
+	return id, nil
 }
 
 func DBCreateTransaction(p PostTransaction) error {
 	pool, _ := GetConn()
 
 	conn, err := pool.Acquire()
-	defer pool.Release(conn)
 
 	if err != nil {
+		return err
+	}
+
+	defer pool.Release(conn)
+
+	_, err = DBGetAccount(p.AccountID)
+
+	if err == pgx.ErrNoRows {
 		return err
 	}
 
@@ -101,11 +105,11 @@ func DBGetAccount(aid uuid.UUID) (string, error) {
 	pool, _ := GetConn()
 
 	conn, err := pool.Acquire()
-	defer pool.Release(conn)
 
 	if err != nil {
 		return "", err
 	}
+	defer pool.Release(conn)
 
 	sql := `SELECT DocNumber FROM ACCOUNTS WHERE AccountID = $1::uuid;`
 
