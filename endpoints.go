@@ -3,7 +3,6 @@ package main
 import (
 	fiber "github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx"
 )
 
 // Handler pra criar uma account.
@@ -20,6 +19,7 @@ func HandlerCreateAccount(c *fiber.Ctx) error {
 		return fiberError(c, fiber.StatusBadRequest, "O campo 'document_number' é obrigatório")
 	}
 
+	// ID é usado para setar o header location
 	id, err := DBCreateAccount(p)
 	if err != nil {
 		return fiberError(c, fiber.StatusInternalServerError, err)
@@ -49,7 +49,7 @@ func HandlerGetAccount(c *fiber.Ctx) error {
 	docNum, err := DBGetAccount(g.AccountID)
 
 	// Verifica se encontramos alguma coisa
-	if err == pgx.ErrNoRows {
+	if err == ErrNoRows {
 		return fiberError(c, fiber.StatusNotFound, "id não encontrado")
 	}
 
@@ -83,13 +83,10 @@ func HandlerCreateTransaction(c *fiber.Ctx) error {
 		return fiberError(c, fiber.StatusBadRequest, "O campo 'operation_type_id' deve estar entre 1 e 4")
 	}
 
-	// Consultar os erros individuais
-
-	err := DBCreateTransaction(p)
-
-	if err != nil {
+	// Verifica se houve erro ao criar a transação
+	if err := DBCreateTransaction(p); err != nil {
 		// Significa que não encontrou a account
-		if err == pgx.ErrNoRows {
+		if err == ErrNoRows {
 			return fiberError(c, fiber.StatusNotFound, "'account_id' inexistente")
 		}
 

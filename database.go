@@ -11,10 +11,14 @@ import (
 	"github.com/jackc/pgx"
 )
 
+// Var global pra manter o estado
 var (
-	dbPool *pgx.ConnPool
+	dbPool    *pgx.ConnPool
+	ErrNoRows = pgx.ErrNoRows
 )
 
+// Retorna uma conexão do pool.
+// Inicia a conexão ao BD, caso ainda não tenha sido feita
 func GetConn() (*pgx.ConnPool, error) {
 	if dbPool == nil {
 
@@ -29,6 +33,7 @@ func GetConn() (*pgx.ConnPool, error) {
 	return dbPool, nil
 }
 
+// Inicializa os parametros referentes ao pool de conexões
 func setupDBConn() (*pgx.ConnPool, error) {
 	port, _ := strconv.Atoi(os.Getenv("PG_PORT"))
 	pgxConfig := pgx.ConnConfig{
@@ -53,6 +58,8 @@ func setupDBConn() (*pgx.ConnPool, error) {
 	return pool, nil
 }
 
+// Func pra criar accounts.
+// É chamada pelo handler HandlerCreateAccount
 func DBCreateAccount(p PostAccount) (uuid.UUID, error) {
 	pool, _ := GetConn()
 
@@ -73,6 +80,8 @@ func DBCreateAccount(p PostAccount) (uuid.UUID, error) {
 	return id, nil
 }
 
+// Func pra criar transactions.
+// É chamada pelo handler HandlerCreateTransaction
 func DBCreateTransaction(p PostTransaction) error {
 	pool, _ := GetConn()
 
@@ -104,6 +113,9 @@ func DBCreateTransaction(p PostTransaction) error {
 	return nil
 }
 
+// Func pra retornar uma account.
+// É chamada pelo handler HandlerGetAccount e pelo
+// HandlerCreateTransaction (para validar a existencia da conta)
 func DBGetAccount(aid uuid.UUID) (string, error) {
 	pool, _ := GetConn()
 
