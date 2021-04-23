@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -29,11 +30,13 @@ func GetConn() (*pgx.ConnPool, error) {
 }
 
 func setupDBConn() (*pgx.ConnPool, error) {
+	port, _ := strconv.Atoi(os.Getenv("PG_PORT"))
 	pgxConfig := pgx.ConnConfig{
-		Host:     "localhost", // pegar endereço do network do docker
-		Database: "sampleapi",
-		User:     "sampleapi",
-		Password: "supersafe",
+		Host:     os.Getenv("PG_HOST"),
+		Port:     uint16(port),
+		Database: os.Getenv("POSTGRES_DB"),
+		User:     os.Getenv("POSTGRES_USER"),
+		Password: os.Getenv("POSTGRES_PASSWORD"),
 	}
 
 	pgxConnPool := pgx.ConnPoolConfig{

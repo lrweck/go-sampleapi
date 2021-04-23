@@ -1,0 +1,41 @@
+version: "3.8"
+services:
+    db:
+        image: postgres
+        container_name: pg_ctnr
+        environment:
+          POSTGRES_PASSWORD: sampleapi
+          POSTGRES_USER: sampleapi
+          POSTGRES_DB: sampleapi
+        volumes:
+            - ./init_database.sql:/docker-entrypoint-initdb.d/script.sql
+        ports: 
+            - "15432:5432"
+        restart: always
+        networks:
+            - pg-network
+           
+    app:
+        image: golang
+        container_name: golang_ctnr
+        restart: always
+        environment: 
+            POSTGRES_PASSWORD: sampleapi
+            POSTGRES_USER: sampleapi
+            POSTGRES_DB: sampleapi
+            PG_HOST: pg_ctnr
+            PG_PORT: 5432
+        volumes:
+            - .:/go/src/github.com/lrweck/go-sampleapi
+        working_dir: /go/src/github.com/lrweck/go-sampleapi
+        command: go run .
+        ports:
+            - "8001:8000"
+        depends_on:
+            - db
+        networks:
+            - pg-network
+
+networks: 
+    pg-network:
+        driver: bridge
