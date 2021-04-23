@@ -36,12 +36,13 @@ func main() {
 
 }
 
+// Aguarda a leitura do signal de cancelamento, e faz shutdown do server
 func gracefulShutdown(ch chan os.Signal, app *fiber.App) {
 	<-ch
-	log.Println("Received shutdown command...")
+	log.Println("Recebido comando shutdown...")
 	err := app.Shutdown()
 	if err != nil {
-		log.Fatal("Error shutting down:", err)
+		log.Fatal("Erro ao finalizar aplicação:", err)
 		return
 	}
 }
