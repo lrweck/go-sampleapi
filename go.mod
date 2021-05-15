@@ -9,7 +9,11 @@ require (
 	github.com/google/uuid v1.2.0
 	github.com/jackc/fake v0.0.0-20150926172116-812a484cc733 // indirect
 	github.com/jackc/pgx v3.6.2+incompatible
+	github.com/jackc/pgx/v4 v4.11.0 // indirect
 	github.com/lib/pq v1.10.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/pkg/profile v1.5.0
 	github.com/shopspring/decimal v1.2.0 // indirect
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
+	golang.org/x/sys v0.0.0-20210426230700-d19ff857e887 // indirect
 )

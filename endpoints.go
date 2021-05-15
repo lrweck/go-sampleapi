@@ -42,27 +42,21 @@ func HandlerGetAccount(c *fiber.Ctx) error {
 		return fiberError(c, fiber.StatusUnprocessableEntity, err)
 	}
 
-	g := GetAccount{
-		AccountID: id,
-	}
-
-	docNum, err := DBGetAccount(g.AccountID)
+	acc, err := DBGetAccount(id)
 
 	// Verifica se encontramos alguma coisa
 	if err == ErrNoRows {
 		return fiberError(c, fiber.StatusNotFound, "id não encontrado")
 	}
 
-	// Precisamos garantir que DocNum seja obrigatorio/não-vazio
-	g.DocNumber = docNum
-
-	return c.JSON(g)
+	return c.JSON(acc)
 
 }
 
 // Handler pra criar uma transação.
 // Chama DBCreateTransaction pra armazenar as informações
 func HandlerCreateTransaction(c *fiber.Ctx) error {
+
 	/* Insert transaction */
 
 	p := PostTransaction{}
@@ -86,8 +80,12 @@ func HandlerCreateTransaction(c *fiber.Ctx) error {
 	// Verifica se houve erro ao criar a transação
 	if err := DBCreateTransaction(p); err != nil {
 		// Significa que não encontrou a account
-		if err == ErrNoRows {
+
+		switch err {
+		case ErrNoRows:
 			return fiberError(c, fiber.StatusNotFound, "'account_id' inexistente")
+		case ErrInsufficientLimit:
+			return fiberError(c, fiber.StatusForbidden, err.Error())
 		}
 
 		return fiberError(c, fiber.StatusInternalServerError, err)
@@ -99,11 +97,13 @@ func HandlerCreateTransaction(c *fiber.Ctx) error {
 }
 
 type PostAccount struct {
-	DocNumber string `json:"document_number"`
+	DocNumber    string  `json:"document_number"`
+	AccountLimit float64 `json:"account_credit_limit"`
 }
 
 type GetAccount struct {
-	AccountID uuid.UUID `json:"account_id"`
+	AccountID    uuid.UUID `json:"account_id"`
+	AccountLimit float64   `json:"account_credit_limit"`
 	PostAccount
 }
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -13,8 +14,9 @@ import (
 
 // Var global pra manter o estado
 var (
-	dbPool    *pgx.ConnPool
-	ErrNoRows = pgx.ErrNoRows
+	dbPool               *pgx.ConnPool
+	ErrNoRows            = pgx.ErrNoRows
+	ErrInsufficientLimit = errors.New("transação inválida. saldo da conta insuficiente")
 )
 
 // Retorna uma conexão do pool.
@@ -55,6 +57,7 @@ func setupDBConn() (*pgx.ConnPool, error) {
 		fmt.Fprintf(os.Stderr, "Connection to DB failed: %v\n", err)
 		return nil, err
 	}
+
 	return pool, nil
 }
 
@@ -70,10 +73,15 @@ func DBCreateAccount(p PostAccount) (uuid.UUID, error) {
 	}
 	defer pool.Release(conn)
 
-	sql := `INSERT INTO ACCOUNTS (AccountID,DocNumber) VALUES ($1::uuid, $2::text);`
+	sql := `INSERT INTO ACCOUNTS (AccountID,DocNumber,availablecreditlimit) VALUES ($1::uuid, $2::text, $3::numeric);`
 
 	id := uuid.New()
-	if _, err := conn.Exec(sql, id, p.DocNumber); err != nil {
+
+	if p.AccountLimit <= 0 {
+		p.AccountLimit = 200
+	}
+
+	if _, err := conn.Exec(sql, id, p.DocNumber, p.AccountLimit); err != nil {
 		return uuid.Nil, err
 	}
 
@@ -93,10 +101,23 @@ func DBCreateTransaction(p PostTransaction) error {
 
 	defer pool.Release(conn)
 
-	_, err = DBGetAccount(p.AccountID)
+	tx, err := conn.Begin()
+
+	if err != nil {
+		return err
+	}
+
+	acc, err := DBGetAccount(p.AccountID)
 
 	if err == pgx.ErrNoRows {
 		return err
+	}
+
+	p.Amount = normalizeOperationAmount(p.OpeType, p.Amount)
+
+	newLimit := p.Amount + acc.AccountLimit
+	if newLimit < 0 {
+		return ErrInsufficientLimit
 	}
 
 	// Podemos confiar que o modelo tem as regras de refencia válidas para OperationType e Account.
@@ -104,35 +125,57 @@ func DBCreateTransaction(p PostTransaction) error {
 	sql := `INSERT INTO Transactions (TransactionID,AccountID,OperationTypeID,Amount) VALUES
 		   ($1::uuid, $2::uuid, $3::smallint, $4::numeric);`
 
-	p.Amount = normalizeOperationAmount(p.OpeType, p.Amount)
+	if _, err := tx.Exec(sql, uuid.New(), p.AccountID, p.OpeType, p.Amount); err != nil {
+		tx.Rollback()
+		return err
+	}
 
-	if _, err := conn.Exec(sql, uuid.New(), p.AccountID, p.OpeType, p.Amount); err != nil {
+	if err = updateAccountLimit(tx, p.AccountID, newLimit); err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.Printf("Erro ao realizar commit: %v\n", err)
 		return err
 	}
 
 	return nil
+
 }
 
 // Func pra retornar uma account.
 // É chamada pelo handler HandlerGetAccount e pelo
 // HandlerCreateTransaction (para validar a existencia da conta)
-func DBGetAccount(aid uuid.UUID) (string, error) {
+func DBGetAccount(aid uuid.UUID) (*Account, error) {
 	pool, _ := GetConn()
 
 	conn, err := pool.Acquire()
 
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer pool.Release(conn)
 
-	sql := `SELECT DocNumber FROM ACCOUNTS WHERE AccountID = $1::uuid;`
+	sql := `SELECT AccountID,DocNumber,AvailableCreditLimit FROM ACCOUNTS WHERE AccountID = $1::uuid;`
 
-	// fmt.Printf("SELECT DocNumber FROM ACCOUNTS WHERE AccountID = '%v'::uuid;\n", aid)
+	Acc := Account{}
 
-	docNumber := ""
-	err = conn.QueryRow(sql, aid).Scan(&docNumber)
-	return docNumber, err
+	err = conn.QueryRow(sql, aid).Scan(&Acc.AccountID, &Acc.DocNumber, &Acc.AccountLimit)
+
+	log.Printf("Account: %+v\n", Acc)
+	return &Acc, err
+}
+
+func updateAccountLimit(tx *pgx.Tx, acc uuid.UUID, amount float64) error {
+
+	sql := `UPDATE ACCOUNTS SET AvailableCreditLimit = $2 WHERE AccountID = $1::uuid;`
+
+	if _, err := tx.Exec(sql, acc, amount); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Transações de tipo compra e saque são registradas com valor negativo, enquanto
