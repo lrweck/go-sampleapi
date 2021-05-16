@@ -2,6 +2,7 @@ package postgresql
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,6 +14,12 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	maxPoolConns    = 5
+	minPoolConns    = 1
+	maxConnIdleTime = time.Minute
+)
+
 type pgRepo struct {
 	conn    *pool.Pool
 	timeout time.Duration
@@ -22,7 +29,17 @@ func newPgClient(pgURL string, timeout int) (*pool.Pool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 	defer cancel()
 
-	connPool, err := pool.Connect(ctx, pgURL)
+	config, err := pool.ParseConfig(pgURL)
+
+	config.MaxConns = maxPoolConns
+	config.MinConns = minPoolConns
+	config.MaxConnIdleTime = maxConnIdleTime
+
+	if err != nil {
+		return nil, err
+	}
+
+	connPool, err := pool.ConnectConfig(ctx, config)
 	if err != nil {
 		return nil, err
 	}
@@ -48,6 +65,7 @@ func NewPGRepo(pgURL string, timeout int) (rep.ApiRepository, error) {
 	return repo, nil
 }
 
+// FindAccount locates the account and returns an Account struct
 func (r *pgRepo) FindAccount(acc_id uuid.UUID) (*ent.Account, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
@@ -56,7 +74,7 @@ func (r *pgRepo) FindAccount(acc_id uuid.UUID) (*ent.Account, error) {
 	acc := &ent.Account{
 		AccountID: acc_id,
 	}
-	sql := `SELECT DocNumber,AccountLimit FROM ACCOUNTS WHERE AccountID = $1::uuid LIMIT 1;`
+	sql := `SELECT DocNumber,AvailableCreditLimit FROM ACCOUNTS WHERE AccountID = $1::uuid LIMIT 1;`
 
 	err := r.conn.QueryRow(ctx, sql, acc_id).Scan(&acc.DocNumber, &acc.AccountLimit)
 	if err != nil {
@@ -68,6 +86,7 @@ func (r *pgRepo) FindAccount(acc_id uuid.UUID) (*ent.Account, error) {
 	return acc, nil
 }
 
+// StoreAccount persists the account struct to the database
 func (r *pgRepo) StoreAccount(acc *ent.Account) error {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
@@ -81,6 +100,8 @@ func (r *pgRepo) StoreAccount(acc *ent.Account) error {
 	return nil
 }
 
+// StoreTransaction persists the transaction struct to the database.
+// Updates the account limit reflecting the changes
 func (r *pgRepo) StoreTransaction(transac *ent.Transactions) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
@@ -92,17 +113,20 @@ func (r *pgRepo) StoreTransaction(transac *ent.Transactions) error {
 	tx, err := r.conn.Begin(ctx)
 
 	if err != nil {
+		fmt.Printf("1-%s\n", err)
 		return errors.Wrap(err, "repository.Transaction.Store")
 	}
 
 	_, err = tx.Exec(ctx, sql, transac.TransactionID, transac.AccountID, transac.OpeTypeID, transac.Amount)
 
 	if err != nil {
+		fmt.Printf("2-%s\ntx: %+v", err, transac)
 		tx.Rollback(ctx)
 		return errors.Wrap(err, "repository.Transaction.Store")
 	}
 
 	if err = updateAccountLimit(ctx, tx, transac.AccountID, transac.NewAccountLimit); err != nil {
+		fmt.Printf("3-%s\n", err)
 		tx.Rollback(ctx)
 		return errors.Wrap(err, "repository.Transaction.Store")
 	}

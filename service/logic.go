@@ -16,24 +16,32 @@ var (
 	ErrInsufficientLimit  = e.New("insufficient account limit")
 )
 
-type apiService struct {
+type ApiService struct {
 	repo rep.ApiRepository
 }
 
-func NewApiService(repo rep.ApiRepository) rep.ApiRepository {
-	return &apiService{repo}
+// NewApiService creates a new API service, with which is is possible to call a repository
+func NewApiService(repo rep.ApiRepository) *ApiService {
+	return &ApiService{repo}
 }
 
-func (r *apiService) FindAccount(acc_id uuid.UUID) (*ent.Account, error) {
+// FindAccount fetches a Account struct from the underlying storage, by passing a account ID
+func (r *ApiService) FindAccount(acc_id uuid.UUID) (*ent.Account, error) {
+
 	return r.repo.FindAccount(acc_id)
 }
 
-func (r *apiService) StoreAccount(acc *ent.Account) error {
+// FindAccount persists an account to storage
+func (r *ApiService) StoreAccount(acc *ent.Account) error {
 	acc.AccountID = uuid.New()
+	if acc.AccountLimit == 0 {
+		acc.AccountLimit = 200
+	}
 	return r.repo.StoreAccount(acc)
 }
 
-func (r *apiService) StoreTransaction(tx *ent.Transactions) error {
+// FindAccount persists an account to storage
+func (r *ApiService) StoreTransaction(tx *ent.Transactions) error {
 
 	tx.TransactionID = uuid.New()
 
@@ -68,6 +76,4 @@ func normalizeOperationAmount(opeType int, amount *float64) {
 			*amount = -*amount
 		}
 	}
-
-	return amount
 }
