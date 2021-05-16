@@ -1,12 +1,19 @@
 CREATE TABLE Accounts (
     AccountID uuid PRIMARY KEY, 
-	DocNumber TEXT 
+	DocNumber TEXT,
+    AvailableCreditLimit NUMERIC DEFAULT 200 
 );
 
 CREATE TABLE OperationTypes (
     OperationTypeID SMALLINT PRIMARY KEY, 
 	Description TEXT 
 );
+insert into OperationTypes
+values 
+(1,'COMPRA A VISTA'),
+(2,'COMPRA PARCELADA'),
+(3,'SAQUE'),
+(4,'PAGAMENTO');
 
 CREATE TABLE Transactions (
     TransactionID uuid PRIMARY KEY,
